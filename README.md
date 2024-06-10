@@ -1,4 +1,4 @@
-# Streamlit - Mixtral 8x7B - Text Generation Inference
+# FastAPI - Mixtral 8x7B - Text Generation Inference
 
 Building an simple Generative AI application to run text inference on Mixtral 8x7B running on Modal's Serverless Platform.
 
@@ -9,5 +9,4 @@ Building an simple Generative AI application to run text inference on Mixtral 8x
 - https://huggingface.co/docs/text-generation-inference/index
 - https://github.com/huggingface/text-generation-inference
 - https://modal.com/
-- https://streamlit.io/
-  
+- https://fastapi.tiangolo.com/
