@@ -131,3 +131,23 @@ async def completion_stream(self, user_question):
             import ray
 
             ray.shutdown()
+
+# Run Mixtral-8x7B
+# NOTE: TBD: Cannot run locally on a Mac.  Requires CUDA (NVIDIA gpus).
+@app.local_entrypoint()
+def main():
+    questions = [
+        "Implement a Python function to compute Fibonacci numbers.",
+        "What is the fable in involving a fox and grapes?",
+        "What is the product of 9 and 8?",
+        "Who is the current President of the United States?  Where is he from?",
+        "Who is the current Vice President of the United States?",
+        "Who is the current Prime Minister of France?  Where is he from?",
+        "Who is the current Prime Minister of Canada?  Where is he from?",
+        "What is the capital of Texas?  Provide 3 fun things to do there."
+    ]
+    model = Model()
+    for question in questions:
+        print("Sending new request:", question, "\n\n")
+        for text in model.completion_stream.remote_get(question):
+            print(text, end="", flush=text.endswidth("\n"))
