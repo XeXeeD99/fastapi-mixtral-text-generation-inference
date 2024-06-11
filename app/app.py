@@ -51,3 +51,83 @@ vllm_image = (
 app = modal.App(
     "mixtral-vllm-fastapi"
 )
+
+# Define Model using vLLM
+# https://modal.com/docs/guide/lifecycle-functions
+@app.cls(
+    gpu=GPU_CONFIG,
+    timeout=60 * 10,  # timeout after 10 minutes
+    allow_concurrent_inputs=10,
+    image=vllm_image
+)
+class Model:
+    @modal.enter()
+    def start_engine(self):
+        from vllm.engine.arg_utils import AsyncEngineArgs
+        from vllm.engine.async_llm_engine import AsyncLLMEngine
+
+        print("🥶 cold starting inference.  This will take a few minutes.")
+        start = time.monotonic_ns()
+
+        engine_args = AsyncEngineArgs(
+            model=MODEL_DIR,
+            tensor_parallel_size=GPU_CONFIG.count,
+            gpu_memory_utilization=0.90,
+            enforce_eager=False,  # capture graph for faster inference
+            disable_log_stats=True,  # disable logging to stream tokens
+            disable_log_requests=True,
+        )
+        self.template = "[INST] {user} [/INST]"
+
+        # NOTE: Cold start loading the model will take a few minutes.
+        self.engine = AsyncLLMEngine.from_engine_args(engine_args)
+        duration_s = (time.monotonic_ns() - start) / 1e9  # convert nanoseconds to seconds
+        print(f"🚀 engine started in {duration_s:.0f}s")
+
+@modal.method()
+async def completion_stream(self, user_question):
+    from vllm import SamplingParams
+    from vllm.utils import random_uuid
+
+    sampling_params = SamplingParams(
+        temperature=0.75,
+        max_tokens=128,
+        repetition_penalty=1.1,
+    )
+
+    request_id = random_uuid()
+    result_generator = self.engine.generate(
+        self.template.format(user=user_question),
+        sampling_params,
+        request_id,
+    )
+
+    index, num_tokens = 0, 0
+    start = time.monotonic_ns()
+    async for output in result_generator:
+        if (
+            output.outputs[0].text
+            and "\ufffd" == output.outputs[0].text[-1]
+        ):
+            continue
+
+        # get results from inference
+        text_delta = output.outputs[0].text[index:]
+        index = len(output.outputs[0].text)
+        num_tokens = len(output.outputs[0].token_ids)
+
+        yield text_delta
+
+    duration_s = (time.monotonic_ns() - start) / 1e9
+
+    yield (
+        f"\n\tGenerated {num_tokens} tokens from {MODEL_NAME} in {duration_s:.1f}s,"
+        f" throughput = {num_tokens / duration_s:.0f} tokens/second on {GPU_CONFIG}.\n"
+    )
+
+    @modal.exit()
+    def stop_engine(self):
+        if GPU_CONFIG.count > 1:
+            import ray
+
+            ray.shutdown()
