@@ -84,46 +84,46 @@ class Model:
         duration_s = (time.monotonic_ns() - start) / 1e9  # convert nanoseconds to seconds
         print(f"🚀 engine started in {duration_s:.0f}s")
 
-@modal.method()
-async def completion_stream(self, user_question):
-    from vllm import SamplingParams
-    from vllm.utils import random_uuid
+    @modal.method()
+    async def completion_stream(self, user_question):
+        from vllm import SamplingParams
+        from vllm.utils import random_uuid
 
-    sampling_params = SamplingParams(
-        temperature=0.75,
-        max_tokens=128,
-        repetition_penalty=1.1,
-    )
+        sampling_params = SamplingParams(
+            temperature=0.75,
+            max_tokens=128,  # generated output max tokens
+            repetition_penalty=1.1,
+        )
 
-    request_id = random_uuid()
-    result_generator = self.engine.generate(
-        self.template.format(user=user_question),
-        sampling_params,
-        request_id,
-    )
+        request_id = random_uuid()
+        result_generator = self.engine.generate(
+            self.template.format(user=user_question),
+            sampling_params,
+            request_id,
+        )
 
-    index, num_tokens = 0, 0
-    start = time.monotonic_ns()
-    async for output in result_generator:
-        if (
-            output.outputs[0].text
-            and "\ufffd" == output.outputs[0].text[-1]
-        ):
-            continue
+        index, num_tokens = 0, 0
+        start = time.monotonic_ns()
+        async for output in result_generator:
+            if (
+                output.outputs[0].text
+                and "\ufffd" == output.outputs[0].text[-1]
+            ):
+                continue
 
-        # get results from inference
-        text_delta = output.outputs[0].text[index:]
-        index = len(output.outputs[0].text)
-        num_tokens = len(output.outputs[0].token_ids)
+            # get results from inference
+            text_delta = output.outputs[0].text[index:]
+            index = len(output.outputs[0].text)
+            num_tokens = len(output.outputs[0].token_ids)
 
-        yield text_delta
+            yield text_delta
 
-    duration_s = (time.monotonic_ns() - start) / 1e9
+        duration_s = (time.monotonic_ns() - start) / 1e9
 
-    yield (
-        f"\n\tGenerated {num_tokens} tokens from {MODEL_NAME} in {duration_s:.1f}s,"
-        f" throughput = {num_tokens / duration_s:.0f} tokens/second on {GPU_CONFIG}.\n"
-    )
+        yield (
+            f"\n\tGenerated {num_tokens} tokens from {MODEL_NAME} in {duration_s:.1f}s,"
+            f" throughput = {num_tokens / duration_s:.0f} tokens/second on {GPU_CONFIG}.\n"
+        )
 
     @modal.exit()
     def stop_engine(self):
@@ -136,18 +136,25 @@ async def completion_stream(self, user_question):
 # NOTE: TBD: Cannot run locally on a Mac.  Requires CUDA (NVIDIA gpus).
 @app.local_entrypoint()
 def main():
+    start = time.monotonic_ns()
+    print(f"Launching app...")
     questions = [
         "Implement a Python function to compute Fibonacci numbers.",
         "What is the fable in involving a fox and grapes?",
         "What is the product of 9 and 8?",
         "Who is the current President of the United States?  Where is he from?",
         "Who is the current Vice President of the United States?",
-        "Who is the current Prime Minister of France?  Where is he from?",
+        "Who is the current President and Primer of France?  Where is he from?",
         "Who is the current Prime Minister of Canada?  Where is he from?",
-        "What is the capital of Texas?  Provide 3 fun things to do there."
+        "What is the capital of Texas?  Provide 3 fun adult things to do there.",
+        "Have any United States presidents every been convicted on a crime?",
     ]
     model = Model()
     for question in questions:
         print("Sending new request:", question, "\n\n")
-        for text in model.completion_stream.remote_get(question):
-            print(text, end="", flush=text.endswidth("\n"))
+        for text in model.completion_stream.remote_gen(question):
+            print(text, end="", flush=text.endswith("\n"))
+
+    duration_s = (time.monotonic_ns() - start) / 1e9
+    print(f"Completed text generation inference...")
+    print(f"Time: {duration_s:.0f}seconds")
