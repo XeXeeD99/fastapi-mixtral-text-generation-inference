@@ -91,7 +91,7 @@ class Model:
 
         sampling_params = SamplingParams(
             temperature=0.75,
-            max_tokens=128,  # generated output max tokens
+            max_tokens=256,  # generated output max tokens
             repetition_penalty=1.1,
         )
 
@@ -139,15 +139,16 @@ def main():
     start = time.monotonic_ns()
     print(f"Launching app...")
     questions = [
-        "Implement a Python function to compute Fibonacci numbers.",
-        "What is the fable in involving a fox and grapes?",
+        "Implement a Python function to compute Fibonacci numbers. Write a Pytest for the function.",
+        "Provide 5 creative names for a pet elephant.  Justify your answer.",
         "What is the product of 9 and 8?",
         "Who is the current President of the United States?  Where is he from?",
+        "Who is the not the current President of the United States?  When did he die?",
         "Who is the current Vice President of the United States?",
         "Who is the current President and Primer of France?  Where is he from?",
         "Who is the current Prime Minister of Canada?  Where is he from?",
         "What is the capital of Texas?  Provide 3 fun adult things to do there.",
-        "Have any United States presidents every been convicted on a crime?",
+
     ]
     model = Model()
     for question in questions:
